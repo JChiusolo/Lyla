@@ -1,0 +1,68 @@
+openapi: 3.0.0
+info:
+  title: Medical Query Interface API
+  description: API for querying medical data through various sources such as PubMed and ClinicalTrials.gov
+  version: 1.0.0
+  contact:
+    name: JChiusolo
+    email: user@example.com
+servers:
+  - url: https://api.example.com/v1
+paths:
+  /search:
+    get:
+      summary: Generate search terms
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: The search term to generate related terms.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful search term generation
+        '400':
+          description: Bad Request  
+  
+  /pubmed/results:
+    get:
+      summary: Retrieve results from PubMed
+      parameters:
+        - name: term
+          in: query
+          required: true
+          description: Search term for PubMed.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful retrieval of results
+        '404':
+          description: No results found  
+  
+  /clinicaltrials/results:
+    get:
+      summary: Retrieve results from ClinicalTrials.gov
+      parameters:
+        - name: term
+          in: query
+          required: true
+          description: Search term for ClinicalTrials.gov.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful retrieval of results
+        '404':
+          description: No results found
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
