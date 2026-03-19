@@ -1,22 +1,22 @@
-import axios from 'axios'
-
 const PUBMED_URL = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
 const TRIALS_URL = 'https://clinicaltrials.gov/api/v2'
 
 async function searchPubMed(query, maxResults) {
   try {
-    const search = await axios.get(`${PUBMED_URL}/esearch.json`, {
-      params: { db: 'pubmed', term: query, retmax: maxResults, sort: 'date' }
-    })
+    const searchParams = new URLSearchParams({ db: 'pubmed', term: query, retmax: maxResults, sort: 'date', retmode: 'json' })
+    const searchRes = await fetch(`${PUBMED_URL}/esearch.fcgi?${searchParams}`)
+    if (!searchRes.ok) throw new Error(`PubMed search failed: ${searchRes.status}`)
+    const searchData = await searchRes.json()
 
-    const pmids = search.data?.esearchresult?.idlist || []
+    const pmids = searchData?.esearchresult?.idlist || []
     if (!pmids.length) return []
 
-    const details = await axios.get(`${PUBMED_URL}/efetch.json`, {
-      params: { db: 'pubmed', id: pmids.join(',') }
-    })
+    const summaryParams = new URLSearchParams({ db: 'pubmed', id: pmids.join(','), retmode: 'json' })
+    const summaryRes = await fetch(`${PUBMED_URL}/esummary.fcgi?${summaryParams}`)
+    if (!summaryRes.ok) throw new Error(`PubMed summary failed: ${summaryRes.status}`)
+    const summaryData = await summaryRes.json()
 
-    return (details.data?.result || [])
+    return Object.values(summaryData?.result || {})
       .filter(a => a.uid)
       .map(a => ({
         id: a.uid,
@@ -37,11 +37,12 @@ async function searchPubMed(query, maxResults) {
 
 async function searchClinicalTrials(query, maxResults) {
   try {
-    const response = await axios.get(`${TRIALS_URL}/studies`, {
-      params: { query, pageSize: maxResults, sortField: 'StartDate', sortOrder: 'desc' }
-    })
+    const params = new URLSearchParams({ query, pageSize: maxResults, sortField: 'StartDate', sortOrder: 'desc' })
+    const response = await fetch(`${TRIALS_URL}/studies?${params}`)
+    if (!response.ok) throw new Error(`Clinical Trials failed: ${response.status}`)
+    const data = await response.json()
 
-    return (response.data?.studies || []).map(study => {
+    return (data?.studies || []).map(study => {
       const proto = study?.protocolSection || {}
       const ident = proto?.identificationModule || {}
       const status = proto?.statusModule || {}
@@ -82,7 +83,6 @@ export const handler = async (event) => {
     }
 
     const results = {}
-
     if (sources.includes('pubmed')) {
       results.pubmed = await searchPubMed(query, maxResults)
     }
