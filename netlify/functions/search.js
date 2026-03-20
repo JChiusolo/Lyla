@@ -38,14 +38,14 @@ Return this exact structure:
 }
 
 // ── Step 2: Search PubMed ──────────────────────────────────────────────────
-async function searchPubMed(parsedQuery) {
+async function searchPubMed(parsedQuery, maxResults) {
   const term = encodeURIComponent(parsedQuery.pubmed.query);
   const baseUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
   const apiKey = process.env.PUBMED_API_KEY
     ? `&api_key=${process.env.PUBMED_API_KEY}`
     : "";
 
-  const searchUrl = `${baseUrl}/esearch.fcgi?db=pubmed&term=${term}&retmax=10&retmode=json&usehistory=y${apiKey}`;
+  const searchUrl = `${baseUrl}/esearch.fcgi?db=pubmed&term=${term}&retmax=${maxResults}&retmode=json&usehistory=y${apiKey}`;
   const searchRes = await fetch(searchUrl);
   const searchData = await searchRes.json();
   const ids = searchData.esearchresult?.idlist ?? [];
@@ -71,12 +71,12 @@ async function searchPubMed(parsedQuery) {
 }
 
 // ── Step 3: Search ClinicalTrials.gov (v2 API) ────────────────────────────
-async function searchClinicalTrials(parsedQuery) {
+async function searchClinicalTrials(parsedQuery, maxResults) {
   const { condition, intervention, keywords } = parsedQuery.clinicalTrials;
 
   const params = new URLSearchParams({
     format: "json",
-    pageSize: "10",
+    pageSize: String(maxResults),
     fields:
       "NCTId,BriefTitle,OverallStatus,Condition,InterventionName,BriefSummary,StartDate",
   });
@@ -154,7 +154,7 @@ export const handler = async (event) => {
   }
 
   try {
-    const { question } = JSON.parse(event.body ?? "{}");
+    const { question, maxResults = 10 } = JSON.parse(event.body ?? "{}");
 
     if (!question?.trim()) {
       return {
@@ -169,8 +169,8 @@ export const handler = async (event) => {
 
     // 2. Fan out to data sources in parallel
     const [pubmedResults, trialResults] = await Promise.allSettled([
-      searchPubMed(parsedQuery),
-      searchClinicalTrials(parsedQuery),
+      searchPubMed(parsedQuery, maxResults),
+      searchClinicalTrials(parsedQuery, maxResults),
     ]);
 
     const pubmed = pubmedResults.status === "fulfilled" ? pubmedResults.value : [];
