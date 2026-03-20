@@ -77,7 +77,8 @@ async function searchClinicalTrials(parsedQuery, maxResults) {
   const params = new URLSearchParams({
     format: "json",
     pageSize: String(maxResults),
-    fields: "NCTId,BriefTitle,OverallStatus,Condition,InterventionName,BriefSummary,StartDate",
+    fields:
+      "NCTId,BriefTitle,OverallStatus,Condition,InterventionName,BriefSummary,StartDate",
   });
 
   const queryParts = [];
@@ -109,35 +110,88 @@ async function searchClinicalTrials(parsedQuery, maxResults) {
   });
 }
 
-// ── Step 4: AI synthesis of results ───────────────────────────────────────
+// ── Step 4: AI synthesis with structured citations ─────────────────────────
 async function synthesizeResults(question, parsedQuery, pubmedResults, trialResults) {
-  const context = [
-    `PubMed returned ${pubmedResults.length} articles. Top titles:`,
-    ...pubmedResults.slice(0, 5).map((r) => `- ${r.title}`),
-    `\nClinicalTrials.gov returned ${trialResults.length} studies. Top titles:`,
-    ...trialResults.slice(0, 5).map((r) => `- ${r.title} (${r.status})`),
-  ].join("\n");
+  const pubmedSources = pubmedResults.slice(0, 8).map((r, i) => ({
+    index: i + 1,
+    type: "PubMed",
+    title: r.title,
+    authors: r.authors?.join(", ") || "Unknown authors",
+    journal: r.journal,
+    pubDate: r.pubDate,
+    url: r.url,
+  }));
+
+  const trialSources = trialResults.slice(0, 5).map((r, i) => ({
+    index: pubmedSources.length + i + 1,
+    type: "ClinicalTrial",
+    title: r.title,
+    status: r.status,
+    conditions: r.conditions?.join(", ") || "",
+    interventions: r.interventions?.join(", ") || "",
+    summary: r.summary,
+    url: r.url,
+  }));
+
+  const allSources = [...pubmedSources, ...trialSources];
+
+  const sourcesText = allSources
+    .map((s) => {
+      if (s.type === "PubMed") {
+        return `[${s.index}] (PubMed) "${s.title}" — ${s.authors}. ${s.journal}, ${s.pubDate}. URL: ${s.url}`;
+      } else {
+        return `[${s.index}] (ClinicalTrial, ${s.status}) "${s.title}" — Conditions: ${s.conditions}. Interventions: ${s.interventions}. Summary: ${s.summary}. URL: ${s.url}`;
+      }
+    })
+    .join("\n");
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-20250514",
-    max_tokens: 400,
+    max_tokens: 1500,
     messages: [
       {
         role: "user",
-        content: `Based on this medical literature search, provide a brief evidence summary answering the user's question. Be factual and concise.
+        content: `You are a biomedical research assistant. A user asked the following medical question, and we retrieved ${allSources.length} sources from PubMed and ClinicalTrials.gov. Summarize the evidence and cite every claim using the source index numbers.
 
 User question: "${question}"
-Search intent: "${parsedQuery.intent}"
 
-Search results context:
-${context}
+Sources:
+${sourcesText}
 
-Write 2-3 sentences summarizing what the evidence suggests. End with: "Please consult a healthcare professional before making any medical decisions."`,
+Return ONLY valid JSON, no markdown, no explanation, in this exact structure:
+{
+  "conclusion": "A 1-2 sentence direct answer to the question, stating overall what the evidence shows.",
+  "supportingSourceCount": <number of sources that are directly relevant>,
+  "citations": [
+    {
+      "index": 1,
+      "title": "exact title from source",
+      "contribution": "1-2 sentences describing what this source found or studied that is relevant to the question",
+      "url": "exact url from source",
+      "type": "PubMed or ClinicalTrial",
+      "authors": "authors string or trial status"
+    }
+  ],
+  "disclaimer": "Please consult a healthcare professional before making any medical decisions."
+}
+
+Only include sources in citations[] that are genuinely relevant to the question. Omit irrelevant ones.`,
       },
     ],
   });
 
-  return response.content.find((b) => b.type === "text")?.text ?? "";
+  const text = response.content.find((b) => b.type === "text")?.text ?? "{}";
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      conclusion: text,
+      supportingSourceCount: allSources.length,
+      citations: [],
+      disclaimer: "Please consult a healthcare professional before making any medical decisions.",
+    };
+  }
 }
 
 // ── Main handler ───────────────────────────────────────────────────────────
@@ -163,10 +217,8 @@ export const handler = async (event) => {
       };
     }
 
-    // 1. Parse question with AI
     const parsedQuery = await parseQueryWithAI(question);
 
-    // 2. Fan out to data sources in parallel
     const [pubmedResults, trialResults] = await Promise.allSettled([
       searchPubMed(parsedQuery, maxResults),
       searchClinicalTrials(parsedQuery, maxResults),
@@ -175,7 +227,6 @@ export const handler = async (event) => {
     const pubmed = pubmedResults.status === "fulfilled" ? pubmedResults.value : [];
     const trials = trialResults.status === "fulfilled" ? trialResults.value : [];
 
-    // 3. AI synthesis runs after both sources return
     const summary = await synthesizeResults(question, parsedQuery, pubmed, trials);
 
     return {
