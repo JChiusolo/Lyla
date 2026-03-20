@@ -12,7 +12,8 @@ export default function SearchFilters({ filters, onFilterChange }) {
       <div className="mb-8">
         <h4 className="text-sm font-semibold text-neutral-900 mb-3">Research Sources</h4>
         <div className="space-y-2">
-          {['pubmed', 'clinical_trials'].map(source => (
+          {/* Keys match what the search function returns */}
+          {['pubmed', 'clinicalTrials'].map(source => (
             <label key={source} className="flex items-center cursor-pointer">
               <input
                 type="checkbox"
