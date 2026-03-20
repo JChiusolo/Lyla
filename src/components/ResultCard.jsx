@@ -4,49 +4,82 @@ import { ExternalLink, ChevronDown, Calendar, Users } from 'lucide-react'
 export default function ResultCard({ article, source }) {
   const [expanded, setExpanded] = useState(false)
 
-  const badgeColor = source === 'pubmed' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+  const isPubMed = source === 'pubmed'
+  const badgeColor = isPubMed ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+
+  // authors is now a flat string array e.g. ["Smith J", "Jones A"]
+  const authorDisplay = article.authors?.slice(0, 2).join(', ')
+
+  // date field renamed from publicationDate to pubDate
+  const dateDisplay = article.pubDate || article.startDate || null
+
+  // abstract not returned — trials have a summary field
+  const bodyText = article.summary || null
 
   return (
     <div className="card hover:shadow-md">
       <div className="p-5">
         <div className="flex justify-between items-start gap-3 mb-3">
           <h3 className="text-lg font-semibold text-neutral-900">{article.title}</h3>
-          <span className={`badge ${badgeColor}`}>{source === 'pubmed' ? 'PubMed' : 'Trial'}</span>
+          <span className={`badge ${badgeColor}`}>{isPubMed ? 'PubMed' : 'Trial'}</span>
         </div>
 
-        {article.abstract && <p className="text-sm text-neutral-600 mb-4 line-clamp-2">{article.abstract}</p>}
+        {bodyText && (
+          <p className="text-sm text-neutral-600 mb-4 line-clamp-2">{bodyText}</p>
+        )}
 
         <div className="space-y-1 mb-4 text-sm text-neutral-600">
-          {source === 'pubmed' && article.authors?.length > 0 && (
+          {isPubMed && authorDisplay && (
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4" />
-              <span>{article.authors.slice(0, 2).map(a => `${a.firstName} ${a.lastName}`).join(', ')}</span>
+              <span>{authorDisplay}</span>
             </div>
           )}
-          {article.publicationDate && (
+          {!isPubMed && article.status && (
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                article.status === 'RECRUITING' ? 'bg-green-100 text-green-700' :
+                article.status === 'COMPLETED' ? 'bg-gray-100 text-gray-700' :
+                'bg-yellow-100 text-yellow-700'
+              }`}>
+                {article.status}
+              </span>
+            </div>
+          )}
+          {dateDisplay && (
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
-              <span>{new Date(article.publicationDate).toLocaleDateString()}</span>
+              <span>{dateDisplay}</span>
             </div>
           )}
         </div>
 
-        {article.abstract && (
-          <button onClick={() => setExpanded(!expanded)} className="text-primary-600 text-sm font-medium flex items-center gap-1">
+        {bodyText && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-primary-600 text-sm font-medium flex items-center gap-1"
+          >
             {expanded ? 'Less' : 'More'} <ChevronDown className={`w-4 h-4 ${expanded ? 'rotate-180' : ''}`} />
           </button>
         )}
       </div>
 
-      {expanded && article.abstract && (
+      {expanded && bodyText && (
         <div className="border-t border-neutral-200 p-5 bg-neutral-50">
-          <p className="text-sm text-neutral-700">{article.abstract}</p>
+          <p className="text-sm text-neutral-700">{bodyText}</p>
         </div>
       )}
 
       <div className="border-t border-neutral-200 px-5 py-3 bg-neutral-50 flex justify-between items-center">
-        <span className="text-xs text-neutral-500">{source === 'pubmed' ? `PMID: ${article.pmid}` : `NCT: ${article.id}`}</span>
-        <a href={article.url} target="_blank" rel="noopener noreferrer" className="text-primary-600 text-sm flex items-center gap-1">
+        <span className="text-xs text-neutral-500">
+          {isPubMed ? `PMID: ${article.id}` : `NCT: ${article.id}`}
+        </span>
+        
+          href={article.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary-600 text-sm flex items-center gap-1"
+        >
           View <ExternalLink className="w-4 h-4" />
         </a>
       </div>
