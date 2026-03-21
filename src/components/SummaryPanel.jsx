@@ -46,22 +46,11 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
   const [accessToken, setAccessToken] = useState(null)
 
   useEffect(() => {
-    const handleOAuthCallback = () => {
-      const hash = window.location.hash
-      if (hash) {
-        const params = new URLSearchParams(hash.substring(1))
-        const token = params.get('access_token')
-        
-        if (token) {
-          setAccessToken(token)
-          setIsSignedIn(true)
-          setError(null)
-          window.history.replaceState({}, document.title, window.location.pathname)
-        }
-      }
+    const storedToken = localStorage.getItem('google_access_token')
+    if (storedToken) {
+      setAccessToken(storedToken)
+      setIsSignedIn(true)
     }
-
-    handleOAuthCallback()
   }, [])
 
   if (!summary) return null
@@ -76,9 +65,9 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
     const redirectUri = `${window.location.origin}/auth/callback`
     const scope = encodeURIComponent('https://www.googleapis.com/auth/presentations https://www.googleapis.com/auth/drive')
     const responseType = 'token'
-    
+
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${scope}`
-    
+
     window.location.href = authUrl
   }
 
