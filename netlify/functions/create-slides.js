@@ -59,15 +59,14 @@ exports.handler = async (event) => {
           elementProperties: {
             pageObjectId: 'summary_slide',
             size: {
-              width: { magnitude: 9, unit: 'INCHES' },
-              height: { magnitude: 7, unit: 'INCHES' },
+              width: { magnitude: 9000000, unit: 'EMU' },
+              height: { magnitude: 7000000, unit: 'EMU' },
             },
             transform: {
               scaleX: 1,
               scaleY: 1,
-              translateX: { magnitude: 0.5, unit: 'INCHES' },
-              translateY: { magnitude: 0.5, unit: 'INCHES' },
-              unit: 'INCHES',
+              translateX: { magnitude: 500000, unit: 'EMU' },
+              translateY: { magnitude: 500000, unit: 'EMU' },
             },
           },
         },
@@ -89,15 +88,14 @@ exports.handler = async (event) => {
           elementProperties: {
             pageObjectId: 'citations_slide',
             size: {
-              width: { magnitude: 9, unit: 'INCHES' },
-              height: { magnitude: 7, unit: 'INCHES' },
+              width: { magnitude: 9000000, unit: 'EMU' },
+              height: { magnitude: 7000000, unit: 'EMU' },
             },
             transform: {
               scaleX: 1,
               scaleY: 1,
-              translateX: { magnitude: 0.5, unit: 'INCHES' },
-              translateY: { magnitude: 0.5, unit: 'INCHES' },
-              unit: 'INCHES',
+              translateX: { magnitude: 500000, unit: 'EMU' },
+              translateY: { magnitude: 500000, unit: 'EMU' },
             },
           },
         },
