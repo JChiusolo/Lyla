@@ -47,7 +47,7 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
 
   useEffect(() => {
     window.gapi = window.gapi || {}
-    
+
     const script = document.createElement('script')
     script.src = 'https://apis.google.com/js/platform.js'
     script.async = true
@@ -56,7 +56,7 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
       window.gapi.load('auth2', () => {
         const auth = window.gapi.auth2.init({
           client_id: '45893805451-5jj3mimasahbc9v1baegis10e19db2ps.apps.googleusercontent.com',
-          scope: 'https://www.googleapis.com/auth/presentations https://www.googleapis.com/auth/drive'
+          scope: 'https://www.googleapis.com/auth/presentations https://www.googleapis.com/auth/drive',
         })
         setGoogleAuth(auth)
         setIsSignedIn(auth.isSignedIn.get())
@@ -132,7 +132,6 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
 
   return (
     <div className="mb-8 space-y-4">
-
       <div className="card p-5 bg-primary-50 border border-primary-200">
         <div className="flex items-start gap-3">
           <div className="shrink-0 w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center mt-0.5">
@@ -221,14 +220,6 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
           <p className="text-xs text-amber-800">{disclaimer}</p>
         </div>
       )}
-
     </div>
   )
 }
-```
-
-**Then:**
-
-1. Update `.env.local` with the new Client ID:
-```
-   VITE_GOOGLE_CLIENT_ID=45893805451-5jj3mimasahbc9v1baegis10e19db2ps.apps.googleusercontent.com
