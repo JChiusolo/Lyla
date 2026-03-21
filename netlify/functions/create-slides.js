@@ -29,12 +29,12 @@ exports.handler = async (event, context) => {
       }
     }
 
-    const auth = new google.auth.OAuth2()
-    auth.setCredentials({
+    const oauth2Client = new google.auth.OAuth2()
+    oauth2Client.setCredentials({
       access_token: accessToken,
     })
 
-    const slides = google.slides({ version: 'v1', auth })
+    const slides = google.slides({ version: 'v1', auth: oauth2Client })
 
     const createResponse = await slides.presentations.create({
       requestBody: {
