@@ -23,22 +23,16 @@ exports.handler = async (event) => {
     })
     const presentationId = presentation.data.presentationId
 
-    // Get the first slide
+    // Get first slide
     const slideData = await slides.presentations.get({ presentationId })
     const firstSlide = slideData.data.slides[0]
-    const pageId = firstSlide.objectId
+    const firstSlideId = firstSlide.objectId
+    let textBoxId = firstSlide.pageElements?.[0]?.objectId
 
-    // Find or create a text box on first slide
-    let textBoxId = null
-    if (firstSlide.pageElements && firstSlide.pageElements.length > 0) {
-      textBoxId = firstSlide.pageElements[0].objectId
-    }
-
-    const requests = []
-
-    // Only add text if we have a text box
+    // Add title to first slide
+    const titleRequests = []
     if (textBoxId) {
-      requests.push({
+      titleRequests.push({
         insertText: {
           objectId: textBoxId,
           text: title,
@@ -47,10 +41,93 @@ exports.handler = async (event) => {
       })
     }
 
-    if (requests.length > 0) {
+    if (titleRequests.length > 0) {
       await slides.presentations.batchUpdate({
         presentationId,
-        requestBody: { requests },
+        requestBody: { requests: titleRequests },
+      })
+    }
+
+    // Create new slides for content
+    const newSlides = []
+
+    // Slide 1: Evidence Summary
+    const summarySlide = {
+      addSlide: {
+        slideLayoutReference: { predefinedLayout: 'BLANK' },
+      },
+    }
+    newSlides.push(summarySlide)
+
+    // Slide 2: Supporting Sources & Citations
+    if (citations && citations.length > 0) {
+      const citationSlide = {
+        addSlide: {
+          slideLayoutReference: { predefinedLayout: 'BLANK' },
+        },
+      }
+      newSlides.push(citationSlide)
+    }
+
+    // Add all new slides
+    const addSlidesResponse = await slides.presentations.batchUpdate({
+      presentationId,
+      requestBody: { requests: newSlides },
+    })
+
+    const summarySlideId = addSlidesResponse.data.replies[0].addSlide.slide.objectId
+
+    // Add content to summary slide
+    let summaryContent = 'Evidence Summary\n\n' + summary
+
+    if (supportingSourceCount > 0) {
+      summaryContent += `\n\nSupporting Sources: ${supportingSourceCount}`
+    }
+
+    if (disclaimer) {
+      summaryContent += `\n\n⚠️ ${disclaimer}`
+    }
+
+    const summaryRequests = [
+      {
+        insertText: {
+          objectId: summarySlideId,
+          text: summaryContent,
+          insertionIndex: 0,
+        },
+      },
+    ]
+
+    await slides.presentations.batchUpdate({
+      presentationId,
+      requestBody: { requests: summaryRequests },
+    })
+
+    // Add citations to second slide if they exist
+    if (citations && citations.length > 0) {
+      const citationSlideId = addSlidesResponse.data.replies[1].addSlide.slide.objectId
+
+      let citationContent = 'Cited References\n\n'
+      citations.forEach((c, idx) => {
+        citationContent += `[${idx + 1}] ${c.title}\n`
+        citationContent += `Authors: ${c.authors}\n`
+        citationContent += `Type: ${c.type}\n`
+        citationContent += `URL: ${c.url}\n\n`
+      })
+
+      const citationRequests = [
+        {
+          insertText: {
+            objectId: citationSlideId,
+            text: citationContent,
+            insertionIndex: 0,
+          },
+        },
+      ]
+
+      await slides.presentations.batchUpdate({
+        presentationId,
+        requestBody: { requests: citationRequests },
       })
     }
 
@@ -61,7 +138,6 @@ exports.handler = async (event) => {
       body: JSON.stringify({ 
         presentationId, 
         presentationUrl,
-        message: 'Presentation created successfully',
       }),
     }
   } catch (error) {
