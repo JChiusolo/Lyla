@@ -8,7 +8,7 @@ export default function HomePage() {
       <section className="py-20 md:py-32 bg-gradient-to-b from-white to-neutral-50">
         <div className="container-max max-w-3xl mx-auto text-center">
           <h1 className="text-4xl md:text-6xl font-bold text-neutral-900 mb-6">
-            Research Search Made <span className="bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">Simple</span>
+           Medical Information Search Made <span className="bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">Simple</span>
           </h1>
           <p className="text-xl text-neutral-600 mb-8">
             Search PubMed and Clinical Trials simultaneously. Find the research you need in seconds.
