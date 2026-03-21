@@ -26,60 +26,92 @@ exports.handler = async (event) => {
     // Get first slide
     const slideData = await slides.presentations.get({ presentationId })
     const firstSlide = slideData.data.slides[0]
-    const firstSlideId = firstSlide.objectId
     let textBoxId = firstSlide.pageElements?.[0]?.objectId
 
     // Add title to first slide
-    const titleRequests = []
     if (textBoxId) {
-      titleRequests.push({
-        insertText: {
-          objectId: textBoxId,
-          text: title,
-          insertionIndex: 0,
+      await slides.presentations.batchUpdate({
+        presentationId,
+        requestBody: { 
+          requests: [{
+            insertText: {
+              objectId: textBoxId,
+              text: title,
+              insertionIndex: 0,
+            },
+          }],
         },
       })
     }
 
-    if (titleRequests.length > 0) {
-      await slides.presentations.batchUpdate({
-        presentationId,
-        requestBody: { requests: titleRequests },
-      })
-    }
-
-    // Prepare requests for adding new slides with content
-    const requests = []
-
-    // Add summary slide
-    requests.push({
-      createSlide: {
-        objectId: 'summary_slide',
-        slideLayoutReference: { predefinedLayout: 'BLANK' },
-        placeholderIdMappings: [],
+    // Create summary slide with text box
+    const summaryRequests = [
+      {
+        createSlide: {
+          objectId: 'summary_slide',
+          slideLayoutReference: { predefinedLayout: 'BLANK' },
+        },
       },
-    })
+      {
+        createShape: {
+          objectId: 'summary_text_box',
+          shapeType: 'TEXT_BOX',
+          elementProperties: {
+            pageObjectId: 'summary_slide',
+            size: {
+              width: { magnitude: 9, unit: 'INCHES' },
+              height: { magnitude: 7, unit: 'INCHES' },
+            },
+            transform: {
+              scaleX: 1,
+              scaleY: 1,
+              translateX: { magnitude: 0.5, unit: 'INCHES' },
+              translateY: { magnitude: 0.5, unit: 'INCHES' },
+              unit: 'INCHES',
+            },
+          },
+        },
+      },
+    ]
 
-    // Add citations slide if citations exist
+    // Add citations slide with text box if citations exist
     if (citations && citations.length > 0) {
-      requests.push({
+      summaryRequests.push({
         createSlide: {
           objectId: 'citations_slide',
           slideLayoutReference: { predefinedLayout: 'BLANK' },
-          placeholderIdMappings: [],
+        },
+      })
+      summaryRequests.push({
+        createShape: {
+          objectId: 'citations_text_box',
+          shapeType: 'TEXT_BOX',
+          elementProperties: {
+            pageObjectId: 'citations_slide',
+            size: {
+              width: { magnitude: 9, unit: 'INCHES' },
+              height: { magnitude: 7, unit: 'INCHES' },
+            },
+            transform: {
+              scaleX: 1,
+              scaleY: 1,
+              translateX: { magnitude: 0.5, unit: 'INCHES' },
+              translateY: { magnitude: 0.5, unit: 'INCHES' },
+              unit: 'INCHES',
+            },
+          },
         },
       })
     }
 
-    const createSlidesResponse = await slides.presentations.batchUpdate({
+    await slides.presentations.batchUpdate({
       presentationId,
-      requestBody: { requests },
+      requestBody: { requests: summaryRequests },
     })
 
-    // Now add content to the new slides
+    // Now add content to text boxes
     const contentRequests = []
 
-    // Summary slide content
     let summaryContent = 'Evidence Summary\n\n' + summary
 
     if (supportingSourceCount > 0) {
@@ -92,13 +124,12 @@ exports.handler = async (event) => {
 
     contentRequests.push({
       insertText: {
-        objectId: 'summary_slide',
+        objectId: 'summary_text_box',
         text: summaryContent,
         insertionIndex: 0,
       },
     })
 
-    // Citations slide content
     if (citations && citations.length > 0) {
       let citationContent = 'Cited References\n\n'
       citations.forEach((c, idx) => {
@@ -109,19 +140,17 @@ exports.handler = async (event) => {
 
       contentRequests.push({
         insertText: {
-          objectId: 'citations_slide',
+          objectId: 'citations_text_box',
           text: citationContent,
           insertionIndex: 0,
         },
       })
     }
 
-    if (contentRequests.length > 0) {
-      await slides.presentations.batchUpdate({
-        presentationId,
-        requestBody: { requests: contentRequests },
-      })
-    }
+    await slides.presentations.batchUpdate({
+      presentationId,
+      requestBody: { requests: contentRequests },
+    })
 
     const presentationUrl = `https://docs.google.com/presentation/d/${presentationId}/edit`
 
