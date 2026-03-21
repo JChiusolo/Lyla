@@ -1,198 +1,130 @@
 const { google } = require('googleapis')
 
-exports.handler = async (event, context) => {
+exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ error: 'Method not allowed' }),
-    }
+    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
 
   try {
     const { title, summary, citations, disclaimer, supportingSourceCount, accessToken } = JSON.parse(event.body)
 
-    console.log('Received request with title:', title)
-    console.log('Access token present:', !!accessToken)
-
     if (!accessToken) {
-      console.log('No access token')
-      return {
-        statusCode: 401,
-        body: JSON.stringify({ error: 'No access token provided' }),
-      }
+      return { statusCode: 401, body: JSON.stringify({ error: 'No access token' }) }
     }
 
-    try {
-      const auth = new google.auth.OAuth2()
-      auth.setCredentials({
-        access_token: accessToken,
+    const auth = new google.auth.OAuth2()
+    auth.setCredentials({ access_token: accessToken })
+
+    const slides = google.slides({ version: 'v1', auth })
+
+    // Create presentation
+    const presentation = await slides.presentations.create({ requestBody: { title } })
+    const presentationId = presentation.data.presentationId
+    const pageId = presentation.data.slides[0].objectId
+    const titleBoxId = presentation.data.slides[0].pageElements[0].objectId
+
+    // Simple approach - just add text to existing title box
+    const requests = [
+      {
+        updateTextStyle: {
+          objectId: titleBoxId,
+          fields: '*',
+          style: { fontSize: { magnitude: 32, unit: 'PT' } },
+        },
+      },
+      {
+        insertText: {
+          objectId: titleBoxId,
+          text: title,
+          insertionIndex: 0,
+        },
+      },
+    ]
+
+    // Execute batch update
+    await slides.presentations.batchUpdate({
+      presentationId,
+      requestBody: { requests },
+    })
+
+    // Now add new slides for content
+    const addSlideRequests = [
+      {
+        addSlide: {
+          slideLayoutReference: { predefinedLayout: 'BLANK' },
+        },
+      },
+    ]
+
+    const addSlideResponse = await slides.presentations.batchUpdate({
+      presentationId,
+      requestBody: { requests: addSlideRequests },
+    })
+
+    const newSlideId = addSlideResponse.data.replies[0].addSlide.slide.objectId
+
+    // Add content to new slide
+    const contentRequests = [
+      {
+        insertText: {
+          objectId: newSlideId,
+          text: 'Evidence Summary\n\n' + summary,
+          insertionIndex: 0,
+        },
+      },
+    ]
+
+    if (supportingSourceCount > 0) {
+      contentRequests.push({
+        insertText: {
+          objectId: newSlideId,
+          text: '\n\nSupporting Sources: ' + supportingSourceCount,
+          insertionIndex: 0,
+        },
+      })
+    }
+
+    if (citations && citations.length > 0) {
+      let citationText = '\n\nCited References:\n\n'
+      citations.forEach((c, idx) => {
+        citationText += `[${idx + 1}] ${c.title}\nAuthors: ${c.authors}\nType: ${c.type}\n\n`
       })
 
-      console.log('Creating Slides client')
-      const slides = google.slides({ version: 'v1', auth })
-
-      console.log('Creating presentation')
-      const presentation = await slides.presentations.create({
-        requestBody: { title },
+      contentRequests.push({
+        insertText: {
+          objectId: newSlideId,
+          text: citationText,
+          insertionIndex: 0,
+        },
       })
+    }
 
-      const presentationId = presentation.data.presentationId
-      console.log('Presentation created:', presentationId)
-
-      const pageId = presentation.data.slides[0].objectId
-
-      const requests = [
-        {
-          insertText: {
-            objectId: presentation.data.slides[0].pageElements[0].objectId,
-            text: title,
-            insertionIndex: 0,
-          },
+    if (disclaimer) {
+      contentRequests.push({
+        insertText: {
+          objectId: newSlideId,
+          text: '\n\n⚠️ Disclaimer: ' + disclaimer,
+          insertionIndex: 0,
         },
-        {
-          createTextBox: {
-            elementProperties: {
-              pageObjectId: pageId,
-              size: { width: { magnitude: 9, unit: 'INCHES' }, height: { magnitude: 0.5, unit: 'INCHES' } },
-              transform: {
-                scaleX: 1,
-                scaleY: 1,
-                translateX: { magnitude: 0.5, unit: 'INCHES' },
-                translateY: { magnitude: 1.5, unit: 'INCHES' },
-                unit: 'INCHES',
-              },
-            },
-            text: 'Evidence Summary',
-          },
-        },
-        {
-          createTextBox: {
-            elementProperties: {
-              pageObjectId: pageId,
-              size: { width: { magnitude: 9, unit: 'INCHES' }, height: { magnitude: 2.5, unit: 'INCHES' } },
-              transform: {
-                scaleX: 1,
-                scaleY: 1,
-                translateX: { magnitude: 0.5, unit: 'INCHES' },
-                translateY: { magnitude: 2.1, unit: 'INCHES' },
-                unit: 'INCHES',
-              },
-            },
-            text: summary || 'No summary available',
-          },
-        },
-      ]
-
-      if (supportingSourceCount > 0) {
-        requests.push({
-          createTextBox: {
-            elementProperties: {
-              pageObjectId: pageId,
-              size: { width: { magnitude: 9, unit: 'INCHES' }, height: { magnitude: 0.3, unit: 'INCHES' } },
-              transform: {
-                scaleX: 1,
-                scaleY: 1,
-                translateX: { magnitude: 0.5, unit: 'INCHES' },
-                translateY: { magnitude: 4.7, unit: 'INCHES' },
-                unit: 'INCHES',
-              },
-            },
-            text: `Supporting Sources: ${supportingSourceCount}`,
-          },
-        })
-      }
-
-      if (citations && citations.length > 0) {
-        requests.push({
-          createTextBox: {
-            elementProperties: {
-              pageObjectId: pageId,
-              size: { width: { magnitude: 9, unit: 'INCHES' }, height: { magnitude: 0.5, unit: 'INCHES' } },
-              transform: {
-                scaleX: 1,
-                scaleY: 1,
-                translateX: { magnitude: 0.5, unit: 'INCHES' },
-                translateY: { magnitude: 5.5, unit: 'INCHES' },
-                unit: 'INCHES',
-              },
-            },
-            text: 'Cited References',
-          },
-        })
-
-        const citationsPerSlide = 3
-        for (let i = 0; i < citations.length; i += citationsPerSlide) {
-          const batch = citations.slice(i, i + citationsPerSlide)
-          const text = batch
-            .map((c, idx) => `[${i + idx + 1}] ${c.title}\nAuthors: ${c.authors}\nType: ${c.type}`)
-            .join('\n\n---\n\n')
-
-          requests.push({
-            createTextBox: {
-              elementProperties: {
-                pageObjectId: pageId,
-                size: { width: { magnitude: 9, unit: 'INCHES' }, height: { magnitude: 6, unit: 'INCHES' } },
-                transform: {
-                  scaleX: 1,
-                  scaleY: 1,
-                  translateX: { magnitude: 0.5, unit: 'INCHES' },
-                  translateY: { magnitude: 0.5, unit: 'INCHES' },
-                  unit: 'INCHES',
-                },
-              },
-              text: text,
-            },
-          })
-        }
-      }
-
-      if (disclaimer) {
-        requests.push({
-          createTextBox: {
-            elementProperties: {
-              pageObjectId: pageId,
-              size: { width: { magnitude: 9, unit: 'INCHES' }, height: { magnitude: 1, unit: 'INCHES' } },
-              transform: {
-                scaleX: 1,
-                scaleY: 1,
-                translateX: { magnitude: 0.5, unit: 'INCHES' },
-                translateY: { magnitude: 7, unit: 'INCHES' },
-                unit: 'INCHES',
-              },
-            },
-            text: `⚠️ Disclaimer: ${disclaimer}`,
-          },
-        })
-      }
-
-      console.log('Batch updating with', requests.length, 'requests')
-      await slides.presentations.batchUpdate({
-        presentationId,
-        requestBody: { requests },
       })
+    }
 
-      const presentationUrl = `https://docs.google.com/presentation/d/${presentationId}/edit`
+    await slides.presentations.batchUpdate({
+      presentationId,
+      requestBody: { requests: contentRequests },
+    })
 
-      console.log('Success! URL:', presentationUrl)
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ presentationId, presentationUrl }),
-      }
-    } catch (apiError) {
-      console.error('API Error:', apiError.message)
-      console.error('API Error code:', apiError.code)
-      console.error('API Error status:', apiError.status)
-      throw apiError
+    const presentationUrl = `https://docs.google.com/presentation/d/${presentationId}/edit`
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ presentationId, presentationUrl }),
     }
   } catch (error) {
-    console.error('Handler error:', error.message)
-    console.error('Full error:', JSON.stringify(error, null, 2))
+    console.error('Error:', error.message)
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        error: error.message,
-        details: error.code || error.status,
-      }),
+      body: JSON.stringify({ error: error.message }),
     }
   }
 }
