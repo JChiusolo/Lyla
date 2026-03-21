@@ -1,47 +1,50 @@
-import React, { useState } from 'react'
-import { Search, Loader } from 'lucide-react'
-import SearchFilters from '../components/SearchFilters'
-import ResultsList from '../components/ResultsList'
-import SummaryPanel from '../components/SummaryPanel'
-import useSearch from '../hooks/useSearch'
+import React from 'react'
+import { Filter } from 'lucide-react'
 
-export default function SearchPage() {
-  const [query, setQuery] = useState('')
-  const [filters, setFilters] = useState({ sources: ['pubmed', 'clinicalTrials'], maxResults: 10 })
-  const { results, summary, loading, error, search } = useSearch()
-
-  const handleSearch = (e) => {
-    e.preventDefault()
-    if (query.trim()) search(query, filters)
-  }
-
-  const hasResults = Object.keys(results).length > 0
-
+export default function SearchFilters({ filters, onFilterChange }) {
   return (
-    <div className="container-max py-8">
-      <h1 className="text-4xl font-bold text-neutral-900 mb-8">Medical Information Search</h1>
+    <div className="card p-6 h-fit sticky top-20">
+      <div className="flex items-center gap-2 mb-6">
+        <Filter className="w-5 h-5 text-primary-600" />
+        <h3 className="font-bold text-neutral-900">Filters</h3>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        <div className="lg:col-span-1">
-          <SearchFilters filters={filters} onFilterChange={setFilters} />
-        </div>
-
-        <div className="lg:col-span-3">
-          <form onSubmit={handleSearch} className="mb-8">
-            <div className="relative">
+      <div className="mb-8">
+        <h4 className="text-sm font-semibold text-neutral-900 mb-3">Research Sources</h4>
+        <div className="space-y-2">
+          {['pubmed', 'clinicalTrials'].map(source => (
+            <label key={source} className="flex items-center cursor-pointer">
               <input
-                type="text"
-                placeholder="Search research..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="input text-lg"
-                autoFocus
+                type="checkbox"
+                checked={filters.sources.includes(source)}
+                onChange={() => {
+                  const newSources = filters.sources.includes(source)
+                    ? filters.sources.filter(s => s !== source)
+                    : [...filters.sources, source]
+                  onFilterChange({ ...filters, sources: newSources })
+                }}
+                className="rounded"
               />
-              <button type="submit" disabled={loading} className="absolute right-2 top-1/2 -translate-y-1/2">
-                {loading ? <Loader className="w-6 h-6 animate-spin" /> : <Search className="w-6 h-6 text-primary-600" />}
-              </button>
-            </div>
-          </form>
+              <span className="ml-3 text-sm text-neutral-700">
+                {source === 'pubmed' ? '🔬 PubMed' : '⚕️ Clinical Trials'}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
 
-          {error && (
-            <div className="card p-4 bg-red-50 border-red-2
+      <div>
+        <label className="block text-sm font-semibold text-neutral-900 mb-3">Results Per Source</label>
+        <select
+          value={filters.maxResults}
+          onChange={(e) => onFilterChange({ ...filters, maxResults: parseInt(e.target.value) })}
+          className="input text-sm"
+        >
+          <option value="5">5 results</option>
+          <option value="10">10 results</option>
+          <option value="20">20 results</option>
+        </select>
+      </div>
+    </div>
+  )
+}
