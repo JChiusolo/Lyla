@@ -1,4 +1,4 @@
-import { google } from 'googleapis'
+const { google } = require('googleapis')
 
 const slides = google.slides('v1')
 
@@ -10,7 +10,7 @@ async function getAuthenticatedClient() {
   return auth.getClient()
 }
 
-export default async function handler(event, context) {
+exports.handler = async (event, context) => {
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -216,7 +216,7 @@ export default async function handler(event, context) {
       statusCode: 500,
       body: JSON.stringify({
         error: 'Failed to create presentation',
-        message: error instanceof Error ? error.message : 'Unknown error',
+        message: error.message || 'Unknown error',
       }),
     }
   }
