@@ -65,8 +65,8 @@ exports.handler = async (event) => {
             transform: {
               scaleX: 1,
               scaleY: 1,
-              translateX: { magnitude: 500000, unit: 'EMU' },
-              translateY: { magnitude: 500000, unit: 'EMU' },
+              translateX: 500000,
+              translateY: 500000,
             },
           },
         },
@@ -94,8 +94,8 @@ exports.handler = async (event) => {
             transform: {
               scaleX: 1,
               scaleY: 1,
-              translateX: { magnitude: 500000, unit: 'EMU' },
-              translateY: { magnitude: 500000, unit: 'EMU' },
+              translateX: 500000,
+              translateY: 500000,
             },
           },
         },
