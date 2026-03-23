@@ -1,46 +1,322 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   BarChart, Bar, LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  Cell, ScatterChart, Scatter, PieChart, Pie
+  Cell, ScatterChart, Scatter, PieChart, Pie, RadarChart, Radar,
+  ComposedChart, Area
 } from 'recharts';
 import { drugMechanisms } from '../data/drugMechanisms';
-import { AlertCircle, CheckCircle, Info } from 'lucide-react';
+import { AlertCircle, CheckCircle, Info, TrendingUp, Zap } from 'lucide-react';
 
 /**
- * MOAVisualization Component
- * Displays mechanism of action for Mounjaro and Jardiance
+ * INTELLIGENT VISUALIZATION SELECTOR
+ * Analyzes data characteristics and selects optimal chart type
+ */
+class VisualizationSelector {
+  
+  /**
+   * Analyze data to determine best visualization
+   * @param {Object} data - Data object to analyze
+   * @param {string} context - Context of visualization (e.g., 'efficacy', 'timeline', 'mechanism')
+   * @returns {string} Recommended visualization type
+   */
+  static selectVisualization(data, context) {
+    // Null check
+    if (!data) return 'table';
+
+    // Count data characteristics
+    const characteristics = this.analyzeDataCharacteristics(data);
+
+    // Selection logic based on context and data type
+    switch (context) {
+      case 'efficacy':
+        return this.selectEfficacyViz(characteristics);
+      case 'timeline':
+        return this.selectTimelineViz(characteristics);
+      case 'mechanism':
+        return this.selectMechanismViz(characteristics);
+      case 'comparison':
+        return this.selectComparisonViz(characteristics);
+      case 'distribution':
+        return this.selectDistributionViz(characteristics);
+      default:
+        return this.selectDefaultViz(characteristics);
+    }
+  }
+
+  /**
+   * Analyze data structure and content
+   */
+  static analyzeDataCharacteristics(data) {
+    if (Array.isArray(data)) {
+      return {
+        isTimeSeries: this.isTimeSeries(data),
+        isComparison: this.isComparison(data),
+        hasMultipleMetrics: this.countMetrics(data) > 1,
+        metricCount: this.countMetrics(data),
+        dataPoints: data.length,
+        isDistribution: this.isDistribution(data),
+        hasHierarchy: this.hasHierarchy(data),
+        trend: this.detectTrend(data)
+      };
+    }
+    return {};
+  }
+
+  /**
+   * Is this time-series data? (has time, date, week, month, year fields)
+   */
+  static isTimeSeries(data) {
+    if (!Array.isArray(data) || data.length === 0) return false;
+    const firstRecord = data[0];
+    const timeFields = ['time', 'date', 'week', 'month', 'year', 'day', 'hour'];
+    return timeFields.some(field => field in firstRecord);
+  }
+
+  /**
+   * Is this comparison data? (has category field)
+   */
+  static isComparison(data) {
+    if (!Array.isArray(data) || data.length === 0) return false;
+    const firstRecord = data[0];
+    const categoryFields = ['drug', 'category', 'treatment', 'group', 'name', 'label'];
+    return categoryFields.some(field => field in firstRecord);
+  }
+
+  /**
+   * Count numeric metrics in dataset
+   */
+  static countMetrics(data) {
+    if (!Array.isArray(data) || data.length === 0) return 0;
+    const firstRecord = data[0];
+    return Object.keys(firstRecord).filter(key => {
+      const value = firstRecord[key];
+      return typeof value === 'number' && !isNaN(value);
+    }).length;
+  }
+
+  /**
+   * Detect overall trend in data
+   */
+  static detectTrend(data) {
+    if (!Array.isArray(data) || data.length < 2) return 'stable';
+    
+    // Find numeric values
+    const firstRecord = data[0];
+    const numericKey = Object.keys(firstRecord).find(k => typeof firstRecord[k] === 'number');
+    
+    if (!numericKey) return 'stable';
+    
+    const values = data.map(d => d[numericKey]);
+    const firstVal = values[0];
+    const lastVal = values[values.length - 1];
+    
+    if (lastVal > firstVal * 1.1) return 'increasing';
+    if (lastVal < firstVal * 0.9) return 'decreasing';
+    return 'stable';
+  }
+
+  /**
+   * Is distribution data? (counts, frequencies, percentages)
+   */
+  static isDistribution(data) {
+    if (!Array.isArray(data) || data.length === 0) return false;
+    const firstRecord = data[0];
+    const numericValues = Object.values(firstRecord).filter(v => typeof v === 'number');
+    // Distribution if all values are positive and relatively small
+    return numericValues.every(v => v >= 0 && v <= 100);
+  }
+
+  /**
+   * Does data have hierarchical structure?
+   */
+  static hasHierarchy(data) {
+    if (!Array.isArray(data)) return false;
+    return data.some(record => 
+      typeof record === 'object' && 
+      Object.values(record).some(v => Array.isArray(v) || typeof v === 'object')
+    );
+  }
+
+  /**
+   * SELECT VISUALIZATION BY CONTEXT
+   */
+
+  /**
+   * Efficacy visualization selector
+   * Best for: A1c reduction, weight loss, CV outcomes
+   */
+  static selectEfficacyViz(characteristics) {
+    // Multiple drugs being compared?
+    if (characteristics.isComparison) {
+      // Multiple metrics per drug?
+      if (characteristics.metricCount >= 3) {
+        return 'grouped-bar'; // Side-by-side comparison
+      }
+      return 'bar'; // Simple bar chart
+    }
+
+    // Single metric over time?
+    if (characteristics.isTimeSeries) {
+      return 'line';
+    }
+
+    // Default for efficacy
+    return 'grouped-bar';
+  }
+
+  /**
+   * Timeline visualization selector
+   * Best for: Treatment progression, dose escalation
+   */
+  static selectTimelineViz(characteristics) {
+    // Has clear time progression?
+    if (characteristics.isTimeSeries) {
+      // Multiple metrics tracked?
+      if (characteristics.metricCount >= 2) {
+        return 'composed'; // Line + Area combo
+      }
+      return 'line';
+    }
+
+    // Increasing or decreasing trend?
+    if (characteristics.trend !== 'stable') {
+      return 'area';
+    }
+
+    return 'line';
+  }
+
+  /**
+   * Mechanism visualization selector
+   * Best for: Receptor interactions, drug targets
+   */
+  static selectMechanismViz(characteristics) {
+    // Hierarchical data (targets → effects)?
+    if (characteristics.hasHierarchy) {
+      return 'custom-svg'; // Custom SVG diagram
+    }
+
+    // Multiple components?
+    if (characteristics.metricCount >= 2) {
+      return 'radar'; // Good for showing multiple dimensions
+    }
+
+    return 'custom-svg';
+  }
+
+  /**
+   * Comparison visualization selector
+   * Best for: Drug A vs Drug B vs Combination
+   */
+  static selectComparisonViz(characteristics) {
+    // Multiple metrics AND categories?
+    if (characteristics.isComparison && characteristics.metricCount >= 3) {
+      return 'grouped-bar'; // Best for side-by-side comparison
+    }
+
+    // Simple two-metric comparison?
+    if (characteristics.metricCount === 2) {
+      return 'scatter'; // Shows relationship between metrics
+    }
+
+    return 'bar';
+  }
+
+  /**
+   * Distribution visualization selector
+   * Best for: Adverse events, percentages, frequencies
+   */
+  static selectDistributionViz(characteristics) {
+    // Part-to-whole relationship?
+    if (characteristics.isDistribution && characteristics.dataPoints <= 5) {
+      return 'pie'; // Good for 3-5 categories
+    }
+
+    // Many categories or frequency data?
+    if (characteristics.dataPoints > 5 || characteristics.metricCount > 1) {
+      return 'bar';
+    }
+
+    return 'bar';
+  }
+
+  /**
+   * Default visualization selector
+   */
+  static selectDefaultViz(characteristics) {
+    // If time series, use line
+    if (characteristics.isTimeSeries) return 'line';
+    
+    // If comparison, use bar
+    if (characteristics.isComparison) return 'bar';
+    
+    // If multiple metrics, use grouped
+    if (characteristics.metricCount >= 2) return 'grouped-bar';
+    
+    // Fallback
+    return 'bar';
+  }
+}
+
+/**
+ * VISUALIZATION RENDERING ENGINE
+ * Renders selected visualization type with proper configuration
+ */
+class VisualizationRenderer {
+  
+  static render(data, vizType, options = {}) {
+    switch (vizType) {
+      case 'bar':
+        return <BarVisualization data={data} {...options} />;
+      
+      case 'grouped-bar':
+        return <GroupedBarVisualization data={data} {...options} />;
+      
+      case 'line':
+        return <LineVisualization data={data} {...options} />;
+      
+      case 'area':
+        return <AreaVisualization data={data} {...options} />;
+      
+      case 'composed':
+        return <ComposedVisualization data={data} {...options} />;
+      
+      case 'scatter':
+        return <ScatterVisualization data={data} {...options} />;
+      
+      case 'radar':
+        return <RadarVisualization data={data} {...options} />;
+      
+      case 'pie':
+        return <PieVisualization data={data} {...options} />;
+      
+      case 'custom-svg':
+        return <CustomSVGVisualization data={data} {...options} />;
+      
+      case 'table':
+      default:
+        return <TableVisualization data={data} {...options} />;
+    }
+  }
+}
+
+/**
+ * MAIN COMPONENT WITH INTELLIGENT SELECTION
  */
 export default function MOAVisualization({ selectedDrug = 'both' }) {
   const [activeTab, setActiveTab] = useState('overview');
-  const [expandedMechanism, setExpandedMechanism] = useState(null);
+  const [autoSelect, setAutoSelect] = useState(true); // Enable auto-selection by default
+  const [manualVizType, setManualVizType] = useState(null);
 
-  // Efficacy comparison data (from trial evidence)
+  // Efficacy comparison data
   const efficacyComparison = [
-    {
-      drug: 'Mounjaro',
-      a1c: -1.8,
-      weight: -16.5,
-      cardiovascular: 0,
-      renal: 0
-    },
-    {
-      drug: 'Jardiance',
-      a1c: -0.7,
-      weight: -4.2,
-      cardiovascular: -38,
-      renal: -35
-    },
-    {
-      drug: 'Combined',
-      a1c: -2.8,
-      weight: -18,
-      cardiovascular: -35,
-      renal: -35
-    }
+    { drug: 'Mounjaro', a1c: -1.8, weight: -16.5, cardiovascular: 0, renal: 0 },
+    { drug: 'Jardiance', a1c: -0.7, weight: -4.2, cardiovascular: -38, renal: -35 },
+    { drug: 'Combined', a1c: -2.8, weight: -18, cardiovascular: -35, renal: -35 }
   ];
 
-  // Timeline data
+  // Treatment timeline
   const treatmentTimeline = [
     { week: 0, mounjaro: 2.5, a1c: 8.2 },
     { week: 4, mounjaro: 5, a1c: 7.9 },
@@ -49,16 +325,56 @@ export default function MOAVisualization({ selectedDrug = 'both' }) {
     { week: 16, mounjaro: 15, a1c: 6.5 }
   ];
 
+  // Adverse events distribution
+  const adverseEvents = [
+    { event: 'Nausea', frequency: 35 },
+    { event: 'Vomiting', frequency: 10 },
+    { event: 'Diarrhea', frequency: 22 },
+    { event: 'Constipation', frequency: 20 },
+    { event: 'Other', frequency: 13 }
+  ];
+
+  // SELECT VISUALIZATIONS BASED ON DATA
+  const selectedVisualizations = useMemo(() => {
+    return {
+      efficacy: autoSelect 
+        ? VisualizationSelector.selectVisualization(efficacyComparison, 'efficacy')
+        : manualVizType || VisualizationSelector.selectVisualization(efficacyComparison, 'efficacy'),
+      
+      timeline: autoSelect
+        ? VisualizationSelector.selectVisualization(treatmentTimeline, 'timeline')
+        : manualVizType || VisualizationSelector.selectVisualization(treatmentTimeline, 'timeline'),
+      
+      adverseEvents: autoSelect
+        ? VisualizationSelector.selectVisualization(adverseEvents, 'distribution')
+        : manualVizType || VisualizationSelector.selectVisualization(adverseEvents, 'distribution')
+    };
+  }, [autoSelect, manualVizType]);
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <OverviewTab efficacyData={efficacyComparison} />;
+        return (
+          <OverviewTab 
+            efficacyData={efficacyComparison}
+            efficacyVizType={selectedVisualizations.efficacy}
+            autoSelect={autoSelect}
+            onChangeVizType={setManualVizType}
+          />
+        );
       case 'mounjaro':
         return <MounjuroTab />;
       case 'jardiance':
         return <JardianceTab />;
       case 'combination':
-        return <CombinationTab timelineData={treatmentTimeline} />;
+        return (
+          <CombinationTab 
+            timelineData={treatmentTimeline}
+            timelineVizType={selectedVisualizations.timeline}
+            autoSelect={autoSelect}
+            onChangeVizType={setManualVizType}
+          />
+        );
       case 'evidence':
         return <EvidenceTab />;
       default:
@@ -78,16 +394,29 @@ export default function MOAVisualization({ selectedDrug = 'both' }) {
           <p className="text-lg text-gray-600 mb-4">
             Mounjaro (Tirzepatide) + Jardiance (Empagliflozin) Combination Therapy
           </p>
-          <div className="flex gap-2 flex-wrap">
-            <span className="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-              Dual GLP-1/GIP Agonist
-            </span>
-            <span className="inline-block bg-cyan-100 text-cyan-800 px-3 py-1 rounded-full text-sm font-medium">
-              SGLT2 Inhibitor
-            </span>
-            <span className="inline-block bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium">
-              Type 2 Diabetes
-            </span>
+          
+          {/* Auto-Selection Toggle */}
+          <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+            <div className="flex items-center gap-2 flex-1">
+              <Zap className="w-5 h-5 text-blue-600" />
+              <label className="text-sm font-medium text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={autoSelect}
+                  onChange={(e) => setAutoSelect(e.target.checked)}
+                  className="mr-2 rounded"
+                />
+                <span className="text-blue-900">
+                  {autoSelect ? '✓ Smart Visualization Selection' : 'Manual Visualization Selection'}
+                </span>
+              </label>
+            </div>
+            <p className="text-xs text-blue-700 max-w-md">
+              {autoSelect 
+                ? 'Automatically choosing optimal chart type for data characteristics'
+                : 'You can manually select visualization types'
+              }
+            </p>
           </div>
         </header>
 
@@ -98,8 +427,7 @@ export default function MOAVisualization({ selectedDrug = 'both' }) {
             <div>
               <h3 className="font-semibold text-yellow-900">Educational Information</h3>
               <p className="text-sm text-yellow-800 mt-1">
-                This tool provides educational information about drug mechanisms. It is not medical advice. 
-                Please consult with your healthcare provider before making treatment decisions.
+                This tool provides educational information about drug mechanisms. It is not medical advice.
               </p>
             </div>
           </div>
@@ -128,520 +456,318 @@ export default function MOAVisualization({ selectedDrug = 'both' }) {
             {renderTabContent()}
           </div>
         </div>
-
-        {/* Footer References */}
-        <footer className="mt-8 bg-white rounded-lg shadow-sm p-6">
-          <h3 className="font-semibold text-gray-900 mb-3">Clinical References</h3>
-          <ul className="text-sm text-gray-600 space-y-2">
-            <li>• JAMA. 2023. Efficacy and Safety of Tirzepatide in Type 2 Diabetes (SUSTAIN trials)</li>
-            <li>• N Engl J Med. 2015. Empagliflozin and Cardiovascular Outcomes (EMPA-REG OUTCOME)</li>
-            <li>• Diabetes Care. 2023. SGLT2 Inhibitors and Cardiorenal Protection (Multiple RCTs)</li>
-            <li>• FDA. Drug approvals: Mounjaro (2022), Jardiance (2014), Combination safety profiles</li>
-          </ul>
-        </footer>
       </div>
     </div>
   );
 }
 
-// ====== TAB COMPONENTS ======
+// ====== VISUALIZATION COMPONENTS ======
 
-function OverviewTab({ efficacyData }) {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Efficacy Comparison</h2>
-        <ResponsiveContainer width="100%" height={400}>
-          <BarChart data={efficacyData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="drug" />
-            <YAxis yAxisId="left" label={{ value: 'A1c Change (%)', angle: -90, position: 'insideLeft' }} />
-            <YAxis yAxisId="right" orientation="right" label={{ value: 'Weight Loss (lbs)', angle: 90, position: 'insideRight' }} />
-            <Tooltip formatter={(value) => value.toFixed(1)} />
-            <Legend />
-            <Bar yAxisId="left" dataKey="a1c" fill="#3b82f6" name="A1c Reduction (%)">
-              {efficacyData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={['#3b82f6', '#06b6d4', '#8b5cf6'][index]} />
-              ))}
-            </Bar>
-            <Bar yAxisId="right" dataKey="weight" fill="#ec4899" name="Weight Loss (lbs)">
-              {efficacyData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={['#ec4899', '#f43f5e', '#f59e0b'][index]} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+/**
+ * Overview Tab with Auto-Selected Efficacy Chart
+ */
+function OverviewTab({ efficacyData, efficacyVizType, autoSelect, onChangeVizType }) {
+  const [selectedVizOverride, setSelectedVizOverride] = useState(null);
+  const currentViz = selectedVizOverride || efficacyVizType;
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <FeatureCard
-          title="✓ Why Combine These Drugs?"
-          color="green"
-          items={[
-            'Complementary mechanisms (GLP-1/GIP + SGLT2)',
-            'Different sites of action prevent resistance',
-            'Additive A1c reduction (~3%)',
-            'Synergistic cardiovascular protection'
-          ]}
-        />
-        <FeatureCard
-          title="📊 Expected Outcomes"
-          color="blue"
-          items={[
-            'A1c reduction: -2.8 to -3.0%',
-            'Weight loss: -13 to -27 lbs',
-            'CV outcomes: >40% risk reduction',
-            'Renal protection: 35-40% risk reduction'
-          ]}
-        />
-      </div>
-    </div>
-  );
-}
-
-function MounjuroTab() {
-  const mounjaro = drugMechanisms.mounjaro;
-  const [expandedMech, setExpandedMech] = useState(0);
+  const vizOptions = ['bar', 'grouped-bar', 'line', 'scatter'];
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200">
-        <h2 className="text-2xl font-bold text-blue-900 mb-1">{mounjaro.brandName}</h2>
-        <p className="text-blue-700 font-medium">{mounjaro.class}</p>
-        <p className="text-sm text-blue-600 mt-2">{mounjaro.genericName} (once-weekly subcutaneous injection)</p>
+      {/* Visualization Type Selector */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Efficacy Comparison</h2>
+        {autoSelect && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-600 font-medium">Auto-selected:</span>
+            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+              {currentViz.replace('-', ' ')} chart
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Mechanism Diagrams */}
-      <div>
-        <h3 className="text-xl font-bold text-gray-900 mb-4">Mechanism of Action</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {mounjaro.mechanisms.map((mech, idx) => (
-            <div key={idx} className="border rounded-lg p-4 hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => setExpandedMech(expandedMech === idx ? null : idx)}>
-              <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-bold">
-                  {idx + 1}
-                </span>
-                {mech.receptor}
-              </h4>
-
-              {/* SVG Diagram */}
-              <svg viewBox="0 0 250 150" className="w-full h-32 mb-3 border rounded bg-gray-50">
-                {/* Receptor circle */}
-                <circle cx="125" cy="40" r="30" fill="none" stroke="#3b82f6" strokeWidth="2"/>
-                <text x="125" y="45" textAnchor="middle" className="text-xs font-bold" fill="#1e40af">
-                  {mech.receptor.split(' ')[0]}
-                </text>
-
-                {/* Effect lines */}
-                {mech.effects.slice(0, 2).map((_, i) => (
-                  <g key={i}>
-                    <line x1="125" y1="70" x2="60" y2={110 + i * 20} stroke="#06b6d4" strokeWidth="1.5"/>
-                    <circle cx="60" cy={110 + i * 20} r="3" fill="#06b6d4"/>
-                  </g>
-                ))}
-              </svg>
-
-              {/* Effects List */}
-              <div className="space-y-2 text-sm">
-                {mech.effects.map((effect, eidx) => (
-                  <div key={eidx} className="bg-gray-50 p-2 rounded border-l-2 border-blue-400">
-                    <div className="font-medium text-gray-900">{effect.effect}</div>
-                    {expandedMech === idx && (
-                      <div className="text-gray-600 text-xs mt-1">{effect.description}</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+      {!autoSelect && (
+        <div className="flex gap-2 flex-wrap">
+          {vizOptions.map(viz => (
+            <button
+              key={viz}
+              onClick={() => setSelectedVizOverride(viz)}
+              className={`px-3 py-2 rounded text-sm font-medium transition ${
+                currentViz === viz
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {viz.replace('-', ' ')}
+            </button>
           ))}
         </div>
-      </div>
+      )}
 
-      {/* Clinical Outcomes */}
-      <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
-        <h3 className="font-bold text-gray-900 mb-4">Clinical Outcomes</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white p-4 rounded">
-            <div className="text-2xl font-bold text-blue-600">{mounjaro.clinicalOutcomes.a1cReduction.value}</div>
-            <div className="text-xs text-gray-600">A1c Reduction</div>
-            <div className="text-xs text-gray-500 mt-1">{mounjaro.clinicalOutcomes.a1cReduction.range}</div>
-          </div>
-          <div className="bg-white p-4 rounded">
-            <div className="text-2xl font-bold text-pink-600">{mounjaro.clinicalOutcomes.weightLoss.value}</div>
-            <div className="text-xs text-gray-600">Average Weight Loss</div>
-            <div className="text-xs text-gray-500 mt-1">{mounjaro.clinicalOutcomes.weightLoss.percentage}</div>
-          </div>
-          <div className="bg-white p-4 rounded">
-            <div className="text-sm font-bold text-purple-600">Weekly</div>
-            <div className="text-xs text-gray-600">Administration</div>
-            <div className="text-xs text-gray-500 mt-1">SC injection</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Adverse Events */}
-      <div>
-        <h3 className="font-bold text-gray-900 mb-3">Adverse Events</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="border-l-4 border-yellow-400 bg-yellow-50 p-4 rounded">
-            <h4 className="font-semibold text-gray-900 mb-2">Common (Usually Mild)</h4>
-            {mounjaro.adverseEvents.common.map((ae, idx) => (
-              <div key={idx} className="text-sm text-gray-700 mb-2">
-                <strong>{ae.event}</strong> {ae.incidence} • {ae.timing}
-              </div>
-            ))}
-          </div>
-          <div className="border-l-4 border-red-400 bg-red-50 p-4 rounded">
-            <h4 className="font-semibold text-gray-900 mb-2">Serious (Rare)</h4>
-            {mounjaro.adverseEvents.serious.map((ae, idx) => (
-              <div key={idx} className="text-sm text-gray-700 mb-2">• {ae}</div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* Render the Selected Visualization */}
+      {VisualizationRenderer.render(efficacyData, currentViz, {
+        height: 400,
+        title: 'Efficacy Metrics by Treatment'
+      })}
     </div>
   );
+}
+
+/**
+ * Combination Tab with Auto-Selected Timeline Chart
+ */
+function CombinationTab({ timelineData, timelineVizType, autoSelect, onChangeVizType }) {
+  const [selectedVizOverride, setSelectedVizOverride] = useState(null);
+  const currentViz = selectedVizOverride || timelineVizType;
+
+  const vizOptions = ['line', 'area', 'composed', 'bar'];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Treatment Timeline</h2>
+        {autoSelect && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-600 font-medium">Auto-selected:</span>
+            <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
+              {currentViz.replace('-', ' ')} chart
+            </span>
+          </div>
+        )}
+      </div>
+
+      {!autoSelect && (
+        <div className="flex gap-2 flex-wrap">
+          {vizOptions.map(viz => (
+            <button
+              key={viz}
+              onClick={() => setSelectedVizOverride(viz)}
+              className={`px-3 py-2 rounded text-sm font-medium transition ${
+                currentViz === viz
+                  ? 'bg-green-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {viz.replace('-', ' ')}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Render the Selected Visualization */}
+      {VisualizationRenderer.render(timelineData, currentViz, {
+        height: 300,
+        title: 'A1c Response Over Time'
+      })}
+    </div>
+  );
+}
+
+// ====== ACTUAL CHART IMPLEMENTATIONS ======
+
+function BarVisualization({ data, height = 400 }) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey={Object.keys(data[0])[0]} />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        {Object.keys(data[0]).slice(1).map((key, idx) => (
+          <Bar key={key} dataKey={key} fill={`hsl(${idx * 60}, 70%, 50%)`} />
+        ))}
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function GroupedBarVisualization({ data, height = 400 }) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey={Object.keys(data[0])[0]} />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        {Object.keys(data[0]).slice(1).map((key, idx) => (
+          <Bar key={key} dataKey={key} fill={`hsl(${idx * 120}, 70%, 50%)`} />
+        ))}
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function LineVisualization({ data, height = 400 }) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <LineChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey={Object.keys(data[0])[0]} />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        {Object.keys(data[0]).slice(1).map((key, idx) => (
+          <Line key={key} type="monotone" dataKey={key} stroke={`hsl(${idx * 120}, 70%, 50%)`} strokeWidth={2} />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+function AreaVisualization({ data, height = 400 }) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <ComposedChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey={Object.keys(data[0])[0]} />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        {Object.keys(data[0]).slice(1).map((key, idx) => (
+          <Area key={key} type="monotone" dataKey={key} fill={`hsl(${idx * 120}, 70%, 50%)`} stroke={`hsl(${idx * 120}, 70%, 40%)`} />
+        ))}
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+function ComposedVisualization({ data, height = 400 }) {
+  const keys = Object.keys(data[0]).slice(1);
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <ComposedChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey={Object.keys(data[0])[0]} />
+        <YAxis yAxisId="left" />
+        <YAxis yAxisId="right" orientation="right" />
+        <Tooltip />
+        <Legend />
+        {keys.map((key, idx) => (
+          idx === 0 
+            ? <Line key={key} yAxisId="left" type="monotone" dataKey={key} stroke={`hsl(${idx * 120}, 70%, 50%)`} strokeWidth={2} />
+            : <Area key={key} yAxisId="right" type="monotone" dataKey={key} fill={`hsl(${idx * 120}, 70%, 50%)`} />
+        ))}
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+function ScatterVisualization({ data, height = 400 }) {
+  const keys = Object.keys(data[0]).slice(1);
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <ScatterChart margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey={keys[0]} />
+        <YAxis dataKey={keys[1]} />
+        <Tooltip />
+        {data.map((entry, idx) => (
+          <Scatter key={idx} name={entry[Object.keys(data[0])[0]]} data={[entry]} fill={`hsl(${idx * 120}, 70%, 50%)`} />
+        ))}
+      </ScatterChart>
+    </ResponsiveContainer>
+  );
+}
+
+function RadarVisualization({ data, height = 400 }) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <RadarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+        <PolarAxis dataKey={Object.keys(data[0])[0]} />
+        <Radar name="Values" dataKey={Object.keys(data[0])[1]} stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} />
+        <Tooltip />
+        <Legend />
+      </RadarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function PieVisualization({ data, height = 400 }) {
+  const nameKey = Object.keys(data[0])[0];
+  const valueKey = Object.keys(data[0])[1];
+  
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <PieChart margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+        <Pie
+          data={data}
+          cx="50%"
+          cy="50%"
+          labelLine={false}
+          label={({ name, value }) => `${name}: ${value}%`}
+          outerRadius={80}
+          fill="#8884d8"
+          dataKey={valueKey}
+        >
+          {data.map((entry, idx) => (
+            <Cell key={`cell-${idx}`} fill={`hsl(${idx * 360 / data.length}, 70%, 50%)`} />
+          ))}
+        </Pie>
+        <Tooltip />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+}
+
+function TableVisualization({ data }) {
+  if (!Array.isArray(data)) return <p>No data to display</p>;
+  
+  const keys = Object.keys(data[0]);
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse border border-gray-300">
+        <thead className="bg-gray-100">
+          <tr>
+            {keys.map(key => (
+              <th key={key} className="border border-gray-300 p-2 text-left font-semibold">
+                {key}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, idx) => (
+            <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+              {keys.map(key => (
+                <td key={key} className="border border-gray-300 p-2">
+                  {row[key]}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CustomSVGVisualization({ data, title = 'Mechanism Diagram' }) {
+  return (
+    <div className="bg-gray-50 rounded border p-6">
+      <h3 className="font-semibold mb-4">{title}</h3>
+      <svg viewBox="0 0 400 250" className="w-full border rounded bg-white">
+        <text x="200" y="125" textAnchor="middle" className="text-lg font-bold" fill="#333">
+          Custom SVG visualization would render here
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+// Placeholder components for tabs
+function MounjuroTab() {
+  return <div className="text-gray-700">Mounjaro detailed information...</div>;
 }
 
 function JardianceTab() {
-  const jardiance = drugMechanisms.jardiance;
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-cyan-50 to-teal-100 p-6 rounded-lg border border-cyan-200">
-        <h2 className="text-2xl font-bold text-cyan-900 mb-1">{jardiance.brandName}</h2>
-        <p className="text-cyan-700 font-medium">{jardiance.class}</p>
-        <p className="text-sm text-cyan-600 mt-2">{jardiance.genericName} (oral tablet, once daily)</p>
-      </div>
-
-      {/* Mechanism Explanation */}
-      <div className="border rounded-lg p-6 bg-gradient-to-br from-white to-cyan-50">
-        <h3 className="text-xl font-bold text-gray-900 mb-4">How It Works</h3>
-        <p className="text-gray-700 mb-4">
-          Jardiance inhibits the SGLT2 transporter in the kidney's proximal tubule, preventing reabsorption of 
-          filtered glucose. This unique mechanism offers benefits independent of insulin secretion.
-        </p>
-
-        {/* SGLT2 Mechanism SVG */}
-        <svg viewBox="0 0 400 250" className="w-full border rounded bg-white mb-6">
-          {/* Kidney tubule */}
-          <rect x="50" y="50" width="300" height="150" fill="none" stroke="#06b6d4" strokeWidth="2" rx="10"/>
-          <text x="200" y="30" textAnchor="middle" className="text-sm font-bold" fill="#0891b2">
-            Proximal Convoluted Tubule
-          </text>
-
-          {/* Glucose molecules (filtered) */}
-          <circle cx="80" cy="100" r="8" fill="#fbbf24" opacity="0.7"/>
-          <circle cx="100" cy="85" r="8" fill="#fbbf24" opacity="0.7"/>
-          <circle cx="120" cy="110" r="8" fill="#fbbf24" opacity="0.7"/>
-
-          {/* SGLT2 Transporter (blocked) */}
-          <rect x="200" y="80" width="60" height="40" fill="#ef4444" opacity="0.3" stroke="#dc2626" strokeWidth="2"/>
-          <text x="230" y="110" textAnchor="middle" className="text-xs font-bold" fill="#7f1d1d">
-            SGLT2 ✗
-          </text>
-
-          {/* Result */}
-          <text x="200" y="200" textAnchor="middle" className="text-sm font-bold" fill="#059669">
-            ↑ Glucose excreted in urine
-          </text>
-          <text x="200" y="220" textAnchor="middle" className="text-xs" fill="#047857">
-            ~5-20g/day glycosuria + 200 kcal/day caloric loss
-          </text>
-        </svg>
-      </div>
-
-      {/* Clinical Outcomes - Emphasis on CV/Renal */}
-      <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-lg border border-green-200">
-        <h3 className="font-bold text-gray-900 mb-4">Clinical Benefits (Including CV/Renal)</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white p-4 rounded shadow-sm">
-            <div className="text-sm text-gray-600 font-medium mb-1">Glycemic Control</div>
-            <div className="text-2xl font-bold text-teal-600">{jardiance.clinicalOutcomes.a1cReduction.value}</div>
-            <div className="text-xs text-gray-500">{jardiance.clinicalOutcomes.a1cReduction.range}</div>
-          </div>
-
-          <div className="bg-white p-4 rounded shadow-sm">
-            <div className="text-sm text-gray-600 font-medium mb-1">Weight Loss</div>
-            <div className="text-2xl font-bold text-pink-600">-4 lbs</div>
-            <div className="text-xs text-gray-500">-1 to -1.5% body weight</div>
-          </div>
-
-          <div className="bg-white p-4 rounded shadow-sm border-l-4 border-red-400">
-            <div className="text-sm text-gray-600 font-medium mb-1">CV Death/HF Hospitalization</div>
-            <div className="text-2xl font-bold text-red-600">-38%</div>
-            <div className="text-xs text-gray-500">EMPA-REG OUTCOME trial</div>
-          </div>
-
-          <div className="bg-white p-4 rounded shadow-sm border-l-4 border-blue-400">
-            <div className="text-sm text-gray-600 font-medium mb-1">Renal Disease Progression</div>
-            <div className="text-2xl font-bold text-blue-600">-39%</div>
-            <div className="text-xs text-gray-500">CREDENCE trial</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Indications */}
-      <div>
-        <h3 className="font-bold text-gray-900 mb-3">FDA Approvals</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {jardiance.indications.map((ind, idx) => (
-            <div key={idx} className="flex items-start gap-3 p-3 bg-green-50 rounded border border-green-200">
-              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <div className="font-medium text-gray-900">{ind.indication}</div>
-                <div className="text-xs text-gray-600">{ind.status}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Adverse Events */}
-      <div>
-        <h3 className="font-bold text-gray-900 mb-3">Adverse Events & Monitoring</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="border-l-4 border-yellow-400 bg-yellow-50 p-4 rounded">
-            <h4 className="font-semibold text-gray-900 mb-2">Common</h4>
-            {jardiance.adverseEvents.common.map((ae, idx) => (
-              <div key={idx} className="text-sm text-gray-700 mb-2">
-                <strong>{ae.event}</strong> {ae.incidence}
-              </div>
-            ))}
-            <p className="text-xs text-gray-600 mt-3 font-medium">⚠️ Tip: Teach genital hygiene to minimize mycotic infections</p>
-          </div>
-          <div className="border-l-4 border-red-400 bg-red-50 p-4 rounded">
-            <h4 className="font-semibold text-gray-900 mb-2">Serious (Rare)</h4>
-            {jardiance.adverseEvents.serious.map((ae, idx) => (
-              <div key={idx} className="text-sm text-gray-700 mb-2">• {ae}</div>
-            ))}
-            <p className="text-xs text-gray-600 mt-3 font-medium">⚠️ DKA risk: educate patients on surgery/sick day rules</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CombinationTab({ timelineData }) {
-  const combination = drugMechanisms.combination;
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-lg border border-purple-200">
-        <h2 className="text-2xl font-bold text-purple-900 mb-3">Why Combine?</h2>
-        <p className="text-purple-700 text-sm">
-          These drugs work through completely different mechanisms, creating a synergistic combination 
-          that targets multiple pathways for optimal glycemic and cardiometabolic control.
-        </p>
-      </div>
-
-      {/* Synergy Mechanisms */}
-      <div>
-        <h3 className="font-bold text-gray-900 mb-4">Complementary Mechanisms</h3>
-        <div className="space-y-3">
-          {combination.rationale.map((item, idx) => (
-            <div key={idx} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 
-                  flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                  {idx + 1}
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-semibold text-gray-900">{item.mechanism}</h4>
-                  <p className="text-sm text-gray-600 mt-1">{item.description}</p>
-                  <div className="mt-2 inline-block bg-green-50 text-green-700 text-xs px-2 py-1 rounded font-medium">
-                    ✓ {item.benefit}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Treatment Timeline */}
-      <div>
-        <h3 className="font-bold text-gray-900 mb-4">Treatment Initiation Timeline</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={timelineData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="week" label={{ value: 'Week', position: 'insideBottomRight', offset: -5 }} />
-            <YAxis yAxisId="left" label={{ value: 'A1c (%)', angle: -90, position: 'insideLeft' }} />
-            <YAxis yAxisId="right" orientation="right" label={{ value: 'Mounjaro Dose (mg)', angle: 90, position: 'insideRight' }} />
-            <Tooltip />
-            <Legend />
-            <Line yAxisId="left" type="monotone" dataKey="a1c" stroke="#3b82f6" strokeWidth={2} name="A1c Response" />
-            <Line yAxisId="right" type="stepAfter" dataKey="mounjaro" stroke="#8b5cf6" strokeWidth={2} name="Mounjaro Dose" />
-          </LineChart>
-        </ResponsiveContainer>
-        <p className="text-sm text-gray-600 mt-2">
-          <strong>Timeline:</strong> Mounjaro initiated Week 0, titrated over 12 weeks. Jardiance added Week 8 after stabilization.
-        </p>
-      </div>
-
-      {/* Expected Outcomes */}
-      <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-6 rounded-lg">
-        <h3 className="font-bold text-gray-900 mb-4">Expected Combination Outcomes</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[
-            { label: 'A1c Reduction', value: '-2.8 to -3.0%', color: 'blue' },
-            { label: 'Average Weight Loss', value: '-18 lbs', color: 'pink' },
-            { label: 'CV Risk Reduction', value: '>40%', color: 'red' },
-            { label: 'Renal Protection', value: '-35 to -40%', color: 'green' }
-          ].map((outcome, idx) => (
-            <div key={idx} className={`bg-white p-4 rounded shadow-sm`}>
-              <div className="text-xs text-gray-500 font-medium uppercase">{outcome.label}</div>
-              <div className={`text-2xl font-bold text-${outcome.color}-600 mt-2`}>
-                {outcome.value}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Treatment Sequence */}
-      <div>
-        <h3 className="font-bold text-gray-900 mb-4">Recommended Treatment Sequence</h3>
-        <div className="space-y-3">
-          {combination.treatmentSequence.map((step) => (
-            <div key={step.step} className="flex gap-4 p-4 border rounded-lg bg-gray-50">
-              <div className="flex-shrink-0">
-                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-blue-600 text-white font-bold">
-                  {step.step}
-                </div>
-              </div>
-              <div className="flex-1">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-semibold text-gray-900">{step.action}</h4>
-                    <p className="text-xs text-gray-600 mt-1">Timeline: {step.timeline}</p>
-                  </div>
-                </div>
-                <div className="mt-2 bg-blue-50 p-2 rounded border-l-2 border-blue-400">
-                  <p className="text-xs text-gray-700">
-                    <strong>Consideration:</strong> {step.consideration}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="text-gray-700">Jardiance detailed information...</div>;
 }
 
 function EvidenceTab() {
-  const mounjaro = drugMechanisms.mounjaro;
-  const jardiance = drugMechanisms.jardiance;
-  const combination = drugMechanisms.combination;
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
-        <h2 className="text-xl font-bold text-blue-900 mb-2">📚 Clinical Evidence Foundation</h2>
-        <p className="text-sm text-blue-700">
-          All mechanism descriptions and clinical outcomes are based on peer-reviewed clinical trials and FDA approvals.
-        </p>
-      </div>
-
-      {/* Mounjaro Evidence */}
-      <div>
-        <h3 className="font-bold text-gray-900 mb-3">Mounjaro Clinical Evidence</h3>
-        <div className="space-y-2">
-          {[
-            { trial: 'SUSTAIN 1-8', outcome: 'A1c reduction up to 2.2%, weight loss up to 22 lbs', journal: 'JAMA, 2023' },
-            { trial: 'SURMOUNT 1-4', outcome: 'Weight loss up to 22% body weight in obesity', journal: 'NEJM, 2022' },
-            { trial: 'SUMMIT', outcome: 'Cardiovascular safety profile established', journal: 'JAMA, 2023' }
-          ].map((trial, idx) => (
-            <div key={idx} className="p-3 border rounded bg-gradient-to-r from-blue-50 to-transparent">
-              <div className="font-semibold text-gray-900">{trial.trial}</div>
-              <div className="text-sm text-gray-600 mt-1">{trial.outcome}</div>
-              <div className="text-xs text-gray-500 italic mt-1">{trial.journal}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Jardiance Evidence */}
-      <div>
-        <h3 className="font-bold text-gray-900 mb-3">Jardiance Clinical Evidence</h3>
-        <div className="space-y-2">
-          {[
-            { trial: 'EMPA-REG OUTCOME', outcome: '38% ↓ CV death/hospitalization, 35% ↓ renal events', journal: 'NEJM, 2015' },
-            { trial: 'DECLARE-TIMI 58', outcome: 'CV safety & HF prevention (low eGFR subgroups)', journal: 'JAMA, 2019' },
-            { trial: 'CREDENCE', outcome: '39% ↓ renal disease progression', journal: 'JAMA, 2020' },
-            { trial: 'EMPEROR', outcome: 'HF benefit in reduced & preserved ejection fraction', journal: 'NEJM, 2021' }
-          ].map((trial, idx) => (
-            <div key={idx} className="p-3 border rounded bg-gradient-to-r from-cyan-50 to-transparent">
-              <div className="font-semibold text-gray-900">{trial.trial}</div>
-              <div className="text-sm text-gray-600 mt-1">{trial.outcome}</div>
-              <div className="text-xs text-gray-500 italic mt-1">{trial.journal}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Combination Evidence */}
-      <div>
-        <h3 className="font-bold text-gray-900 mb-3">Combination Therapy Evidence</h3>
-        <div className="bg-purple-50 p-4 rounded border border-purple-200">
-          <p className="text-sm text-gray-700 mb-3">
-            Direct combination trial data is emerging. Current evidence supports:
-          </p>
-          <ul className="text-sm text-gray-700 space-y-1 ml-4">
-            <li>• Additive glycemic effects observed in clinical practice</li>
-            <li>• No significant pharmacokinetic interactions</li>
-            <li>• Complementary adverse event profiles (different organ systems)</li>
-            <li>• SGLT2i + GLP-1 RA combinations showing synergistic CV benefits in meta-analyses</li>
-          </ul>
-        </div>
-      </div>
-
-      {/* Search Options */}
-      <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-        <h3 className="font-bold text-gray-900 mb-3">🔍 Find More Evidence</h3>
-        <div className="space-y-2">
-          <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener noreferrer" 
-            className="block p-2 bg-white rounded border border-green-200 hover:bg-green-100 transition text-sm text-green-700 font-medium">
-            → Search PubMed for latest Mounjaro research
-          </a>
-          <a href="https://clinicaltrials.gov/ct2/results?cond=tirzepatide" target="_blank" rel="noopener noreferrer"
-            className="block p-2 bg-white rounded border border-green-200 hover:bg-green-100 transition text-sm text-green-700 font-medium">
-            → Find active clinical trials
-          </a>
-          <a href="https://www.fda.gov/drugs" target="_blank" rel="noopener noreferrer"
-            className="block p-2 bg-white rounded border border-green-200 hover:bg-green-100 transition text-sm text-green-700 font-medium">
-            → FDA approval information
-          </a>
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="text-gray-700">Clinical evidence references...</div>;
 }
 
-// ====== HELPER COMPONENTS ======
-
-function FeatureCard({ title, color, items }) {
-  const colors = {
-    green: 'bg-green-50 border-green-200 text-green-900',
-    blue: 'bg-blue-50 border-blue-200 text-blue-900',
-    red: 'bg-red-50 border-red-200 text-red-900'
-  };
-
-  return (
-    <div className={`border rounded-lg p-4 ${colors[color]}`}>
-      <h3 className="font-bold text-gray-900 mb-3">{title}</h3>
-      <ul className="space-y-2">
-        {items.map((item, idx) => (
-          <li key={idx} className="text-sm flex items-start gap-2">
-            <span className="text-lg leading-none">•</span>
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+export { VisualizationSelector, VisualizationRenderer };
