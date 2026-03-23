@@ -426,7 +426,7 @@ function SafetySummaryCard({ drug, data }) {
       
       <div className="space-y-3">
         <div className="bg-white p-3 rounded">
-          <div className="text-xs font-medium text-yellow-700 mb-1">COMMON (>5% incidence)</div>
+          <div className="text-xs font-medium text-yellow-700 mb-1">COMMON, &lt;5% incidence</div>
           <div className="text-sm text-gray-700">
             {commonEvents.length > 0 
               ? commonEvents.map(e => e.event).join(', ')
@@ -435,7 +435,7 @@ function SafetySummaryCard({ drug, data }) {
         </div>
 
         <div className="bg-white p-3 rounded">
-         <div className="text-xs font-medium text-orange-700 mb-1">SERIOUS (Rare, &lt;1% incidence)</div>
+         <div className="text-xs font-medium text-orange-700 mb-1">SERIOUS, &lt;1% incidence</div>
           <div className="text-sm text-gray-700">
             {seriousEvents.length > 0
               ? seriousEvents.map(e => e.event).join(', ')
@@ -444,7 +444,7 @@ function SafetySummaryCard({ drug, data }) {
         </div>
 
         <div className="bg-white p-3 rounded">
-          <div className="text-xs font-medium text-red-700 mb-1">RARE (<0.5%)</div>
+          <div className="text-xs font-medium text-red-700 mb-1">RARE, &lt;.5% incidence</div>
           <div className="text-sm text-gray-700">
             {rareEvents.length > 0
               ? rareEvents.map(e => e.event).join(', ')
