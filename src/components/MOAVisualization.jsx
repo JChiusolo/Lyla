@@ -1,15 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle, Info, Zap } from 'lucide-react';
-import { drugMechanisms } from '../data/drugMechanisms';
 
 /**
  * MOAVisualization Component
  * Displays mechanism of action for Mounjaro and Jardiance
  * 
- * NOTE: Recharts visualization components are conditionally rendered
- * to avoid build-time import resolution issues. They are dynamically
- * imported when needed.
+ * NOTE: All data is defined inline - no external imports needed
  */
 
 /**
@@ -140,7 +137,6 @@ class VisualizationSelector {
 
 /**
  * SIMPLE CHART COMPONENTS (No Recharts dependency)
- * These are fallback components that render without Recharts
  */
 
 function SimpleBarChart({ data, height = 400 }) {
@@ -207,13 +203,11 @@ function SimpleLineChart({ data, height = 300 }) {
   }
 
   const keys = Object.keys(data[0]).slice(1);
-  const firstKey = Object.keys(data[0])[0];
   
   return (
     <div className="w-full p-6 bg-white rounded-lg border border-gray-200">
       <div style={{ height: `${height}px`, position: 'relative', marginBottom: '20px' }}>
         <svg width="100%" height="100%" style={{ border: '1px solid #e5e7eb' }}>
-          {/* Grid lines */}
           {[0, 0.25, 0.5, 0.75, 1].map((y, idx) => (
             <line
               key={`grid-${idx}`}
@@ -227,7 +221,6 @@ function SimpleLineChart({ data, height = 300 }) {
             />
           ))}
           
-          {/* Data lines */}
           {keys.map((key, kidx) => {
             const color = kidx === 0 ? '#3b82f6' : '#8b5cf6';
             const values = data.map(d => d[key] || 0);
@@ -235,20 +228,14 @@ function SimpleLineChart({ data, height = 300 }) {
             const maxVal = Math.max(...values);
             const range = maxVal - minVal || 1;
 
-            let pathData = '';
+            const pathPoints = [];
             data.forEach((item, idx) => {
               const x = (idx / (data.length - 1 || 1)) * 100;
               const yVal = item[key] || 0;
               const yPercent = ((yVal - minVal) / range) * 100;
               const y = 100 - yPercent;
-              pathData += `${x}% ${y}% `;
+              pathPoints.push(`${x}% ${y}%`);
             });
-
-            const points = pathData.split(' ').filter(p => p);
-            const pathPoints = [];
-            for (let i = 0; i < points.length; i += 2) {
-              pathPoints.push(`${points[i]} ${points[i + 1]}`);
-            }
 
             return (
               <polyline
@@ -342,7 +329,6 @@ function SimpleStackedBarChart({ data, height = 400 }) {
         ))}
       </div>
 
-      {/* Summary statistics */}
       <div className="grid grid-cols-3 gap-3 mt-8">
         {['common', 'serious', 'rare'].map((key, idx) => {
           const avg = (data.reduce((sum, d) => sum + (d[key] || 0), 0) / data.length).toFixed(1);
@@ -376,7 +362,7 @@ export default function MOAVisualization() {
     setActiveTab(urlSection);
   }, [urlSection]);
 
-  // DATA
+  // DATA - All inline
   const efficacyComparison = [
     { drug: 'Mounjaro', a1c: -1.8, weight: -16.5, cardiovascular: 0, renal: 0 },
     { drug: 'Jardiance', a1c: -0.7, weight: -4.2, cardiovascular: -38, renal: -35 },
@@ -407,7 +393,6 @@ export default function MOAVisualization() {
     { event: 'Pancreatitis', common: 0, serious: 0.1, rare: 0.05 }
   ];
 
-  // SELECT VISUALIZATIONS
   const selectedVisualizations = useMemo(() => {
     return {
       efficacy: autoSelect 
@@ -464,7 +449,6 @@ export default function MOAVisualization() {
     <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
       <div className="max-w-7xl mx-auto">
         
-        {/* Header */}
         <header className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             Drug Mechanism of Action
@@ -473,7 +457,6 @@ export default function MOAVisualization() {
             Mounjaro (Tirzepatide) + Jardiance (Empagliflozin) Combination Therapy
           </p>
           
-          {/* Smart Selection Toggle */}
           <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
             <div className="flex items-center gap-2 flex-1">
               <Zap className="w-5 h-5 text-blue-600" />
@@ -492,7 +475,6 @@ export default function MOAVisualization() {
           </div>
         </header>
 
-        {/* Warning Banner */}
         <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
           <div className="flex gap-3">
             <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
@@ -506,7 +488,6 @@ export default function MOAVisualization() {
           </div>
         </div>
 
-        {/* Navigation Tabs */}
         <div className="bg-white rounded-lg shadow-sm mb-6 overflow-hidden">
           <div className="flex border-b border-gray-200 overflow-x-auto">
             {[
@@ -531,13 +512,11 @@ export default function MOAVisualization() {
             ))}
           </div>
 
-          {/* Tab Content */}
           <div className="p-6">
             {renderTabContent()}
           </div>
         </div>
 
-        {/* Footer */}
         <footer className="mt-8 bg-white rounded-lg shadow-sm p-6">
           <h3 className="font-semibold text-gray-900 mb-3">Clinical References</h3>
           <ul className="text-sm text-gray-600 space-y-2">
@@ -551,10 +530,6 @@ export default function MOAVisualization() {
     </div>
   );
 }
-
-/**
- * TAB COMPONENTS
- */
 
 function OverviewTab({ efficacyData, vizType, autoSelect }) {
   return (
@@ -749,7 +724,6 @@ function FeatureCard({ title, color, items }) {
   );
 }
 
-// Placeholder components
 function MounjuroTab() {
   return (
     <div className="text-gray-700 p-6 bg-blue-50 rounded-lg">
