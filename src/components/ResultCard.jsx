@@ -11,22 +11,9 @@ export default function ResultCard({ article, source }) {
     ? 'bg-blue-100 text-blue-800'
     : 'bg-green-100 text-green-800'
 
-  // ── Field mapping ────────────────────────────────────────────────────────
-  // PubMed shape from netlify/functions/search.js:
-  //   { id, title, authors: string[], journal, pubDate, url, source }
-  //
-  // Clinical trial shape:
-  //   { id, title, status, conditions: string[], interventions: string[],
-  //     summary, startDate, url, source }
-  //
-  // ResultCard previously read article.abstract, article.publicationDate,
-  // article.pmid, and tried a.firstName/a.lastName on string authors —
-  // none of those fields exist in the actual API response.
-
-  const bodyText   = article.summary ?? article.abstract ?? null
+  const bodyText    = article.summary ?? article.abstract ?? null
   const displayDate = isPubMed ? article.pubDate : article.startDate
 
-  // authors is string[] from PubMed ("Smith J"), not objects
   const authorText = Array.isArray(article.authors) && article.authors.length > 0
     ? article.authors.slice(0, 3).join(', ')
     : null
@@ -40,7 +27,6 @@ export default function ResultCard({ article, source }) {
     <div className="card hover:shadow-md">
       <div className="p-5">
 
-        {/* Title + source badge */}
         <div className="flex justify-between items-start gap-3 mb-3">
           <h3 className="text-lg font-semibold text-neutral-900 leading-snug">
             {article.title}
@@ -50,12 +36,10 @@ export default function ResultCard({ article, source }) {
           </span>
         </div>
 
-        {/* Body preview */}
         {bodyText && (
           <p className="text-sm text-neutral-600 mb-4 line-clamp-2">{bodyText}</p>
         )}
 
-        {/* Metadata rows */}
         <div className="space-y-1 mb-4 text-sm text-neutral-600">
 
           {isPubMed && authorText && (
@@ -105,7 +89,6 @@ export default function ResultCard({ article, source }) {
           )}
         </div>
 
-        {/* Expand toggle */}
         {bodyText && (
           <button
             onClick={() => setExpanded(!expanded)}
@@ -117,14 +100,12 @@ export default function ResultCard({ article, source }) {
         )}
       </div>
 
-      {/* Expanded body */}
       {expanded && bodyText && (
         <div className="border-t border-neutral-200 p-5 bg-neutral-50">
           <p className="text-sm text-neutral-700 leading-relaxed">{bodyText}</p>
         </div>
       )}
 
-      {/* Footer */}
       <div className="border-t border-neutral-200 px-5 py-3 bg-neutral-50 flex justify-between items-center">
         <span className="text-xs text-neutral-500">{identifier}</span>
         {article.url && (
